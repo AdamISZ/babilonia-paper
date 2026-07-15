@@ -23,6 +23,7 @@
 \newtheorem{theorem}{Theorem}
 \newtheorem{definition}{Definition}
 \newtheorem{remark}{Remark}
+\newtheorem{lemma}{Lemma}
 \newtheorem{observation}{Observation}
 \usepackage[skip=0.6\baselineskip, indent=0pt]{parskip}
 \title{\textbf{Babilonia: probabilistic coinjoin and covert betting}}
@@ -415,12 +416,64 @@ On receipt of the tuple $\textrm{ctxt}, T, R_{..}, s_1, s_2, e_1, e_2$, Bob does
 \item He verifies $e = e_1 + e_2\ \mod\ p$
 \end{itemize}
 
-\subsubsection{Squaring proof security}
+\subsubsection{Squaring proof security: hiding}
 Security of the branch-hiding rests on a square-DDH assumption (distinguishing $(G,tG,t^2G)$ from $(G, tG, \textrm{random}G)$). One caveat is intrinsic to squaring: the mask $t^2$ ranges over quadratic residues, so for a \emph{guessable} candidate $a$ the value $\textrm{ctxt}-a$ can be tested for quadratic residuosity, passing always for the true $a$ and with probability $\approx\tfrac12$ for a random false one. The hiding property is therefore sound only for \emph{high-entropy} masked scalars --- which the thimble scalars $a_1,a_2$ and $t$ are, being sampled uniformly from $\mathbb{F}_p$. It must not be used to hide low-entropy plaintexts (amounts, counters, votes). See Appendix A for the detailed reduction proof.
 
 Note that the proof would be totally unsound in a DDH-easy group (because DDH easy $\Rightarrow$ square-DDH easy); but secp256k1 is a DDH-hard group, because it is prime order and has no efficiently-computable pairing.
 
 An additional point is that square-DDH is \emph{not} reducible to DDH, or at least no such reduction is known.
+
+\subsubsection{Squaring proof security: soundness}
+% Requires: \usepackage{amsthm,amssymb}
+The soundness of the proof is relatively simple; it's 2-special soundness in the ROM of the relevant hash function:
+
+\begin{lemma}[Knowledge soundness of $\pi_A$]
+  The squaring-pad proof $\pi_A$ of Section~\ref{sec:squaring-proof} is a
+  proof of knowledge for the relation
+  $$
+    \mathcal R_{\pi_A}
+    =
+    \left\{
+      (\mathsf{ctxt},T,A_1,A_2);\,
+      (t,c,a_c):
+      c\in\{1,2\},\,
+      T=tG,\,
+      A_c=a_cG,\,
+      \mathsf{ctxt}=a_c+t^2 \bmod p
+    \right\}.
+  $$
+\end{lemma}
+
+\begin{proof}[Sketch]
+  Recall that $\pi_A$ is a 1-of-2 CDS-OR of Chaum--Pedersen proofs of
+  equal discrete logarithms:
+  $$
+    \operatorname{DLEQ}(G,T;\,T,Y_i),
+    \qquad
+    Y_i = \mathsf{ctxt}\cdot G - A_i,
+    \qquad i\in\{1,2\}.
+  $$
+  Each branch is a standard proof of knowledge of $t$ satisfying
+  $tG=T$ and $tT=Y_i$, and therefore has 2-special soundness: from two
+  accepting transcripts with the same commitments but different
+  challenges, an extractor recovers
+  $$
+    t = \frac{s_i - s'_i}{e_i - e'_i} \bmod p.
+  $$
+
+  The CDS-OR composition preserves this property. Given two accepting
+  transcripts with distinct total challenges $e\neq e'$, where
+  $e=e_1+e_2$ and $e'=e'_1+e'_2$, at least one branch has
+  $e_i\neq e'_i$. Special soundness on that branch extracts $t$ (note that this is true independent of which branch is extracted; the corresponding secret in both cases is $t$).
+
+  Once $t$ is known, the ciphertext determines the encrypted thimble
+  scalar:
+  $$
+    a_c = \mathsf{ctxt} - t^2 \bmod p.
+  $$
+  Checking which published thimble satisfies $a_c G = A_c$ identifies
+  the branch $c$ and completes the witness.
+\end{proof}
 
 \subsection{ZK-friendly hash pad: $f=\mathrm{Poseidon}$}
 
