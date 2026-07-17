@@ -29,7 +29,7 @@
 \title{\textbf{Babilonia: probabilistic coinjoin and covert betting}}
 \author{waxwing}
 
-\date{July 12, 2026 \\ \medskip Version 1.0}
+\date{July 12, 2026 \\ \medskip Version 1.1}
 
 \begin{document}
 \maketitle
@@ -132,6 +132,8 @@ One more preamble: this section describes the mechanism and, at its end, the on-
 
 Throughout, $\mathbb{G}=\langle G\rangle$ denotes the secp256k1 group of prime order $p$, and $\mathbb{F}_p$ its scalar field; $H(\cdot)$ is the BIP340 challenge hash.
 
+Note, we'll be a little sloppy (read: inefficient) on exact order of events here; that is deferred to the next section (\S3.3). Here we'll focus on the causal flow.
+
 If funds are deposited by both parties (henceforth: Alice as ``dealer'', initiating the bet, and Bob as ``player'', accepting the bet, but noting that there is no trust in the dealer) into a joint MuSig2 \cite{musig2,bip327} output, we must construct two outgoing transactions: a RefundTx and a PayoutTx, as alternative spending paths from what we will call $U_1$, the utxo owned by the MuSig. Write $P_A,P_B$ for Alice's and Bob's \emph{funding} keys, so that $U_1$'s scriptPubkey is a keypath-only taproot output for the aggregate $P_{\mathrm{agg}}=\mathrm{KeyAgg}(P_A,P_B)$.
 
 Next, to start the actual protocol, Alice randomly generates two secret values $a_1, a_2$ from the set of valid scalars in $\mathbb{F}_p$ where $p$ is the order of the secp256k1 group. She sends $A_i = a_i G,\quad i \in \{1,2\}$ to Bob along with a PoK of each of these secret discrete logs using the vanilla method (Schnorr signature). We call $A_i$ the ``thimbles''.
@@ -159,9 +161,9 @@ Equivalently, Bob knows the discrete log of $K-A_y$ with respect to $G$ for one 
 
 Once Alice has verified $\pi_B$ she is ready to prepare the PayoutTx template; it has one input $U_1$, and at least one output, paying to a scriptPubkey, which we will call $O_K$, whose taproot internal key is $K$, and which has one leaf: a relative-timelock reclaim path for Alice, of the form
 \[
-\texttt{<}\,t_1\,\texttt{>}\ \ \texttt{OP\_CHECKSEQUENCEVERIFY}\ \ \texttt{OP\_DROP}\ \ \texttt{<}\,P_A\,\texttt{>}\ \ \texttt{OP\_CHECKSIG},
+\texttt{<}\,T_1\,\texttt{>}\ \ \texttt{OP\_CHECKSEQUENCEVERIFY}\ \ \texttt{OP\_DROP}\ \ \texttt{<}\,P_A\,\texttt{>}\ \ \texttt{OP\_CHECKSIG},
 \]
-where $t_1$ is a relative timelock in blocks (BIP68). $t_1$ is small relative to $T_R$. Thus the honest winner spends $O_K$ by the \emph{key path} under $K$ (an ordinary taproot payment, no script revealed), while Alice can reclaim after $t_1$ blocks via this single script leaf only if Bob never claims.
+where $T_1$ is a relative timelock in blocks (BIP68). $T_1$ is small relative to $T_R$. Thus the honest winning Bob spends $O_K$ by the \emph{key path} under $K$ (an ordinary taproot payment, no script revealed), while Alice can reclaim after $T_1$ blocks via this single script leaf only if Bob never claims.
 
 In a later section (\ref{sec:coop}) we show how we can preserve the ``payment-like'' characteristic of this transaction even when the logic of the betting game gives the payout to Alice, that is, Bob has guessed incorrectly ($y\neq c$). An important note upfront: taproot's design \cite{bip341} enforces that keypath-spends for cases where a script-path leaf exists are \emph{not} distinguishable, even after the payment occurs, from keypath-spends from scriptPubKeys where no script-path spend existed, under the assumption that the observer does not know the original internal key used in constructing the output. This is because even pure keypath scriptPubkeys use a dummy script path formed by $H_{TapTweak}(P)$, and $P$ cannot be extracted by the observer.
 
@@ -205,7 +207,7 @@ Once Alice receives $\sigma_B$, she is safe to broadcast the transaction, which:
 \item which Bob sees, and he calculates $t = \sigma - \sigma_B - \sigma'$;
 \item he then calculates $a_c = \textrm{ctxt} - f(t)$;
 \item he then compares $W_b + a_c G$ with $K$; if it is the same, he has the secret key $w_b+a_c$ of $O_K$'s internal key and can spend by the key path;
-\item if he does not spend before the relative timelock $t_1$, Alice spends via the CSV path, or uses a cooperative optimization --- see Section~\ref{sec:coop}.
+\item if he does not spend before the relative timelock $T_1$, Alice spends via the CSV path, or uses a cooperative optimization --- see Section~\ref{sec:coop}.
 \end{itemize}
 
 \subsection{The protocol as a sequence of messages}
@@ -216,16 +218,16 @@ We assume that one peer has identified another candidate peer and there is a rel
 \item Dealer sends funding information: $u_A$ for funding FundingTx, $P_A$ for MuSig2 destination key $M$ (will be outpoint $u_1$), receiving address for RefundTx $R_A$, change address for PayoutTx $C_A$, coop-overlay address $O_A$, nonces for RefundTx and PayoutTx and CoopOverlay signature negotiation. Simultaneously, she sends $A_1, A_2$ and a proof of knowledge of the dlogs $a_1, a_2$, keeping the latter secret.
 \item Player validates the PoK of $A_1, A_2$. Player sends funding information: $u_B$ for funding FundingTx, $P_B$ for MuSig2 destination key $M$, (will be outpoint $u_1$), receiving address for RefundTx $R_B$, change address for PayoutTx $C_B$, nonces for RefundTx and PayoutTx and CoopOverlay signature negotiation, and $K$ for settlement transaction, along with a ZKP $\pi_B$ proving that $K$ is of the form $A_y + W_b$ for his choice $y$ from $A_1, A_2$ and a further key he proves knowledge of (see above for details).
 \item Dealer validates $\pi_B$. Dealer calculates MuSig2 destination address $M$ and outpoint $u_1$, and full FundingTx ($u_A, u_B \rightarrow u_1, C_B$). Dealer then calculates RefundTx ($u_1 \rightarrow R_A, R_B$) and calculates partial sig on RefundTx $\sigma_{A,R}$. Sends $\sigma_{A,R}$.
-\item Player calculates MuSig2 destination address $M$ and outpoint $u_1$, and full FundingTx ($u_A, u_B \rightarrow u_1, C_B$). Player then calculates RefundTx ($u_1 \rightarrow R_A, R_B$). Having received $\sigma_{A,R}$ he now calculates his own partial sig on RefundTx $\sigma_{B,R}$. Sends $\sigma_{B,R}$.
-\item Dealer validates RefundTx with the given full MuSig2 signature $\sigma_{A,R} + \sigma_{B,R}$. If all validates, she signs the FundingTx (which she already calculated) on $u_A$ to get $\sigma{A, F}$ and passes this as a PSBT to Player.
-\item Player validates RefundTx with the given full MuSig2 signature $\sigma_{A,R} + \sigma{B,R}$. If all validates, he co-signs the FundingTx (which he already calculated) on $u_B$ to get $\sigma{B, F}$ and combines this with the PSBT to broadcast the FundingTx.
-\item Both sides wait for confirmation of funding transaction. Note that they already have the PayoutTx, which is ($u_1 \rightarrow O_K, C_A$)
-\item Dealer calculates the adaptor signature and point $\sigma'_{A, P}, T$ for PayoutTx signing on $u_1$ (noting that the nonces were already exchanged for this MuSig session).   She then calculates $\pi_A$ and ciphertext $\textrm{ctxt}$ as described above and sends $\sigma'_{A, P}, T, \pi_A, \textrm{ctxt}$. $T$ was chosen so that $\textrm{ctxt} = a_c + t^2\ \textrm{mod}\ p$ and $tG = T$ and $a_c \in a_1,a_2$ and $\pi_A$ proves this.
+\item Player calculates MuSig2 destination address $M$ and outpoint $u_1$, and full FundingTx ($u_A, u_B \rightarrow u_1, C_B$). Player then calculates RefundTx ($u_1 \rightarrow R_A, R_B$). Having received $\sigma_{A,R}$ he now calculates his own partial sig on RefundTx $\sigma_{B,R}$, and validates the full signature on RefundTx (if invalid, aborts). Sends $\sigma_{B,R}$.
+\item Dealer validates that the RefundTx is fully signed; if not, aborts. She then calculates the adaptor signature and point $\sigma'_{A, P}, T$ for PayoutTx signing on $u_1$ (noting that the nonces were already exchanged for this MuSig session).   She then calculates $\pi_A$ and ciphertext $\textrm{ctxt}$ as described above and sends $\sigma'_{A, P}, T, \pi_A, \textrm{ctxt}$. $T$ was chosen so that $\textrm{ctxt} = a_c + f(t)\ \textrm{mod}\ p$ and $tG = T$ and $a_c \in a_1,a_2$ and $\pi_A$ proves this.
 \item Player verifies $\sigma'_{A, P}, T, \pi_A$ against PayoutTx and the predetermined nonces. If it verifies, he calculates, and then sends $\sigma_{B,P}$.
+\item Dealer signs the FundingTx (which she already calculated) on $u_A$ to get $\sigma{A, F}$ and passes this as a PSBT to Player.
+\item Player co-signs the FundingTx (which he already calculated) on $u_B$ to get $\sigma_{B, F}$ and combines this with the PSBT to broadcast the FundingTx.
+\item Both sides wait for confirmation of funding transaction. Note that they already have the PayoutTx, which is ($u_1 \rightarrow O_K, C_A$)
 \item Dealer constructs fully signed PayoutTx, by calculating $\sigma_{A,P}$. She sends $t$ and her co-signature $\sigma_{A, O}$ on the CoopOverlayTx to the Player (but does \emph{not} broadcast PayoutTx).
-\item Player sees $t$, and uses it to calculate $a_c = \textrm{ctxt} - t^2 \ \textrm{mod}\ p$. And then compares $a_c G$ with $A_y$, if they match, he has won and will calculate the full MuSig2 cosignature on PayoutTx as $\sigma{B,P} + \sigma'{A, P} + t$ and use it to broadcast PayoutTx. And must send another payment from $O_K$ to his own wallet independently before the timeout clause $t_1$.
+\item Player sees $t$, and uses it to calculate $a_c = \textrm{ctxt} - f(t) \ \textrm{mod}\ p$. And then compares $a_c G$ with $A_y$, if they match, he has won and will calculate the full MuSig2 cosignature on PayoutTx as $\sigma_{B,P} + \sigma'_{A, P} + t$ and use it to broadcast PayoutTx. And must send another payment from $O_K$ to his own wallet independently before the timeout clause $T_1$.
 \item If they do not match, he calculates CoopOverlayTx, and his co-signature $\sigma_{B,O}$ on that transaction, and broadcasts it (knowing he has lost the bet anyway, he does this to maintain a payment-shaped transaction).
-\item In case the Player disappears and does not complete the previous step promptly, the Dealer broadcasts, PayoutTx which pays $u_1$ into an output she will control after $t_1$ blocks\footnote{The player can ``grief'' here also, by waiting for this event even if he won; but as noted elsewhere, this is not a money gaining attack, it only destroys a mild privacy effect for both participants}.
+\item In case the Player disappears and does not complete the previous step promptly, the Dealer broadcasts, PayoutTx which pays $u_1$ into an output she will control after $T_1$ blocks\footnote{The player can ``grief'' here also, by waiting for this event even if he won; but as noted elsewhere, this is not a money gaining attack, it only destroys a mild privacy effect for both participants}.
 \end{enumerate}
 
 In cases where the steps say ``X validates Y'', it is to be understood that if validation fails, that participant aborts, either by doing nothing, or, if they have already committed funds, by broadcasting RefundTx as is obvious according to context. Step 13 is a specific kind of abort; the bet completes, but some privacy w.r.t. outside observers is lost.
@@ -525,6 +527,7 @@ See \url{https://github.com/AdamISZ/babilonia}. The code is largely written by C
 As of the time of writing, this implementation has no ``pot-sweetener'' function, but it is not hard to add.
 
 \section{Other similar ideas}
+\label{sec:ideas}
 
 If we take the core idea here as ``not-balance-preserving but cryptographically fair collaborative transactions'' and, as noted, this can have some significant benefits in terms of obscuring transaction history, there are a few different other directions one could look at it, than this very simple ``probabilistic coinjoin with covert properties''. For example:
 
@@ -536,6 +539,11 @@ If we take the core idea here as ``not-balance-preserving but cryptographically 
 \end{itemize}
 
 \ldots and perhaps many others I haven't thought of.
+
+\section{Acknowledgements}
+
+Thanks to O. Kurbatov (author of \cite{kurbatov2025oprand}) for a correction to (\S3.3) as the protocol messaging order was the more inefficient version; this corrected version (which matches the implementation in \ref{sec:ideas}) prevents the players having to wait for funding confirmation in order to do bet setup, which makes it far more practical (that is, it makes a fallback to a refund transaction far less likely).
+
 \begin{thebibliography}{99}
 
 \bibitem{chaum1981} D.~Chaum. Untraceable electronic mail, return addresses, and digital pseudonyms. \emph{Communications of the ACM}, 24(2):84--90, 1981.
