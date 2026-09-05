@@ -246,9 +246,9 @@ In cases where the steps say ``X validates Y'', it is to be understood that if v
 \subsection{The general $1$-of-$N$ game}
 \label{sec:nary}
 
-The even-money ($N=2$) game generalizes directly to $1$-of-$N$ for any small $N$, giving Bob win probability $1/N$ paid at odds $N{:}1$. Nothing in the construction is specific to $N=2$: Alice publishes $N$ thimbles $A_1,\dots,A_N$, and both $\pi_B$ (Definition~\ref{def:piB}) and $\pi_A$ (Definition~\ref{def:piA}) are already stated over $N$ branches. Each is realised as a $1$-of-$N$ CDS-OR (the $N=2$ instance is detailed in \S\ref{sec:squaring-proof}): one honest branch, plus $N-1$ simulated branches, whose sub-challenges sum to the Fiat--Shamir challenge, $\sum_{i=1}^{N} e_i = e \bmod p$. The security arguments are unchanged in form: knowledge-soundness is the same special-soundness extraction on whichever branch differs between two accepting transcripts, and branch-hiding rests on the same square-DDH assumption --- Appendix~A gives the reduction for $N=2$, and the $N$-branch case follows from it by a standard hybrid over the thimbles $A_i$.
+The even-money ($N=2$) game generalizes directly to $1$-of-$N$ for any small $N$, giving Bob win probability $1/N$. The protocol generalizes naturally for $N \ge 2$: Alice publishes $N$ thimbles $A_1,\dots,A_N$, and both $\pi_B$ (Definition~\ref{def:piB}) and $\pi_A$ (Definition~\ref{def:piA}) are already stated over $N$ branches. Each is realised as a $1$-of-$N$ CDS-OR (the $N=2$ instance is detailed in \S\ref{sec:squaring-proof}): one honest branch, plus $N-1$ simulated branches, whose sub-challenges sum to the Fiat--Shamir challenge, $\sum_{i=1}^{N} e_i = e \bmod p$. The security arguments are unchanged in form: knowledge-soundness is the same special-soundness extraction on whichever branch differs between two accepting transcripts, and branch-hiding rests on the same square-DDH assumption --- Appendix~A gives the reduction for $N=2$, and the $N$-branch case follows from it.
 
-The one real cost is communication: the sigma-protocol proofs are $O(N)$ in size, so this is practical only for small $N$ (a SNARK proving system, or the OPRF route of GTT \cite{gerhardt2026}, would remove the $O(N)$ blow-up). In practice this is not a binding limitation, because $N$ is deliberately kept small --- both to bound the dealer's fronted liquidity and because, as we show in \S\ref{sec:agg}, the covertness of the payout \emph{amount} comes not from large $N$ but from \emph{aggregating} many small-$N$ sub-bets. (A $k$-of-$N$ threshold variant is also possible but not pursued here.)
+As previously noted, the $\Sigma$-protocol proofs are $O(N)$ in size, so this is practical only for small $N$ (a SNARK proving system, or the OPRF route of GTT \cite{gerhardt2026}, would remove the $O(N)$ blow-up). In practice this is not a binding limitation, because $N$ is deliberately kept small --- both to bound the dealer's fronted liquidity and because, as we show in \S\ref{sec:agg}, the covertness of the payout \emph{amount} comes not from large $N$ but from \emph{aggregating} many small-$N$ sub-bets. (A $k$-of-$N$ threshold variant is also possible but not pursued here.)
 
 \subsection{Payment-shaped transactions}
 \label{sec:pst}
@@ -441,7 +441,7 @@ An additional point is that square-DDH is \emph{not} reducible to DDH, or at lea
 
 \subsubsection{Squaring proof security: soundness}
 % Requires: \usepackage{amsthm,amssymb}
-The soundness of the proof is relatively simple; it's 2-special soundness in the ROM of the relevant hash function:
+The soundness of the proof is relatively simple; it's 2-special soundness in the ROM applied to the relevant hash function:
 
 \begin{lemma}[Knowledge soundness of $\pi_A$]
   The squaring-pad proof $\pi_A$ of Section~\ref{sec:squaring-proof} is a
